@@ -1,0 +1,23 @@
+1. Original Camera Preview
+
+g++ /home/pi/distributed-vision/src/camera_preview.cpp -o /home/pi/distributed-vision/bin/camera_preview.bin -I/usr/local/include/opencv4 -L/usr/local/lib -lopencv_core -lopencv_highgui -lopencv_imgcodecs -lopencv_imgproc -lopencv_calib3d
+
+raspividyuv -3d sbs -w 1280 -h 480 -fps 90 --luma -t 0 -n -o – | /home/pi/distributed-vision/bin/camera_preview.bin
+
+2. Calibration Data Collection
+
+g++ /home/pi/distributed-vision/src/cal_collection.cpp -o /home/pi/distributed-vision/bin/cal_collection.bin -I/usr/local/include/opencv4 -L/usr/local/lib -lopencv_core -lopencv_highgui -lopencv_imgcodecs -lopencv_imgproc -lopencv_calib3d
+
+raspividyuv -3d sbs -w 1280 -h 480 -fps 40 --luma -t 0 -n -o - | /home/pi/distributed-vision/bin/cal_collection.bin
+
+3. Calibration Processing 
+
+g++ /home/pi/distributed-vision/src/calibration.cpp -o /home/pi/distributed-vision/bin/calibration.bin -I/usr/local/include/opencv4 -L/usr/local/lib -lopencv_core -lopencv_highgui -lopencv_imgcodecs -lopencv_imgproc -lopencv_calib3d
+
+/home/pi/distributed-vision/bin/calibration.bin
+
+4. April Tag Reading
+
+g++ /home/pi/distributed-vision/src/distributed_vision.cpp -o /home/pi/distributed-vision/bin/distributed_vision.bin -I/usr/local/include/opencv4 -I/home/pi/distributed-vision/apriltag -L/usr/local/lib -lopencv_core -lopencv_highgui -lopencv_imgcodecs -lopencv_imgproc -lopencv_calib3d
+
+raspividyuv -3d sbs -w 640 -h 240 -fps 40 --luma -t 0 -n -o - | /home/pi/distributed-vision/bin/distributed_vision.bin
