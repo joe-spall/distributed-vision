@@ -42,7 +42,7 @@ int main()
     int total_photos = 50;//            # Number of images to take
     int countdown = 3;//                 # Interval for count-down timer, seconds
     int font = cv::FONT_HERSHEY_SIMPLEX;// # Cowntdown timer font
-    std::string folder_name = "/home/pi/stereopi-cpp-tutorial/";    
+    std::string folder_name = "/home/pi/distributed-vision/calibration_data/";    
      
     //Camera settimgs
     int cam_width = 1280;//            # Cam sensor width settings

@@ -24,6 +24,21 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+extern "C" {
+#include "apriltag.h"
+#include "tag36h11.h"
+#include "tag25h9.h"
+#include "tag16h5.h"
+#include "tagCircle21h7.h"
+#include "tagCircle49h12.h"
+#include "tagCustom48h12.h"
+#include "tagStandard41h12.h"
+#include "tagStandard52h13.h"
+#include "common/getopt.h"
+}
+
+
+
 #include <vector>
 #include <string>
 #include <algorithm>
@@ -34,15 +49,14 @@
 #include <ctype.h>
 
 
-int SWS = 5;
-int PFS = 5;
-int preFiltCap = 29;
-int minDisp = -25;
-int numOfDisp = 16;
-int TxtrThrshld = 100;
-int unicRatio = 10;
-int SpcklRng = 15;
-int SpklWinSze = 100;
+int threads = 1;
+std::string family = "tag36h11";
+double decimate = 2.0;
+double blur = 0.0;
+bool refine_edges = true;
+
+
+
 float actualFPS = 0.0;
 
 // Global settings
@@ -56,58 +70,10 @@ long long getTimestamp() {
 }
 
 
-void loadParams()
-{
-    fprintf(stderr, "Loading params...\n");
-    std::string filename = folder_name + "3dmap_set.yml";
-    cv::FileStorage fs;
-    if (fs.open(filename, cv::FileStorage::READ))
-    {
-        fs["SWS"] >> SWS;
-        fs["PFS"] >> PFS;
-        fs["preFiltCap"] >> preFiltCap;
-        fs["minDisp"] >> minDisp;
-        fs["numOfDisp"] >> numOfDisp;
-        fs["TxtrThrshld"] >> TxtrThrshld;
-        fs["unicRatio"] >> unicRatio;
-        fs["SpcklRng"] >> SpcklRng;
-        fs["SpklWinSze"] >> SpklWinSze;
-    }
-
-
-}
-
-bool stereo_depth_map(cv::Mat &left, cv::Mat &right, cv::Ptr<cv::StereoBM> bm,
-		      float &time1, float &time2, float &time3, float &time4)
-{
-
-
-    // cv::cvtColor(left, left, cv::COLOR_BGR2GRAY);
-    // cv::cvtColor(right, right, cv::COLOR_BGR2GRAY);
-
-    cv::Mat disp, disp8, colored;
-    long long startT = getTimestamp();
-    bm->compute( left, right, disp);
-    long long computeTime = getTimestamp();
-    time1 += computeTime - startT;
-    disp.convertTo(disp8, CV_8U);
-    long long ucharConvertTime = getTimestamp();
-    time2 += ucharConvertTime - computeTime;
-    cv::applyColorMap(disp8, colored, cv::COLORMAP_JET);
-    long long colorizeTime = getTimestamp();
-    time3 += colorizeTime - ucharConvertTime;
-    cv::imshow("map", colored);
-    long long showtime = getTimestamp();
-    time4 += showtime - colorizeTime;
-    char k = cv::waitKey(1);
-    if (k == 'q' || k == 'Q')
-      return false;
-
-    return true;    
-}
-
 int main()
 {
+    
+    
     int imgHeight = 240;
     int imgWidth = 640;
 
@@ -122,56 +88,51 @@ int main()
     char *buf = (char *)malloc(bufLen);
     int count = 0;
     
-    cv::FileStorage fsStereo(calibration_data_folder + "stereo_camera_calibration" + std::to_string(imgHeight) + ".yml", cv::FileStorage::READ);
-    if (!fsStereo.isOpened())
-    {
-        fprintf(stderr, "Camera calibration data not found in cache\n");
-        exit(1);
-    }
+    // Loads callibration
+    cv::Mat map1, map2;
+
     cv::Mat leftMapX, leftMapY, rightMapX, rightMapY;
-    fsStereo["leftMapX"] >> leftMapX;
-    fsStereo["leftMapY"] >> leftMapY;
-    fsStereo["rightMapX"] >> rightMapX;
-    fsStereo["rightMapY"] >> rightMapY;
 
-    loadParams();
+    cv::FileStorage fsFront(calibration_data_folder + "calibration_camera_" + std::to_string(imgHeight) + "_front" + ".yml", cv::FileStorage::READ);
+    if (fsFront.isOpened())
+    {
+        fsFront["map1"] >> leftMapX;
+        fsFront["map2"] >> leftMapY;
+        fsFront.release();
+    }
+    else
+    {
+        fprintf(stderr, "Front camera calibration data not found in cache.\n");
+        return false;
+    }
 
-    cv::namedWindow("map");
-    cv::moveWindow("map", 50, 100);
+    cv::FileStorage fsBack(calibration_data_folder + "calibration_camera_" + std::to_string(imgHeight) + "_back" + ".yml", cv::FileStorage::READ);
+    if (fsBack.isOpened())
+    {
+        fsBack["map1"] >> rightMapX;
+        fsBack["map2"] >> rightMapY;
+        fsBack.release();
+    }
+    else
+    {
+        fprintf(stderr, "Back camera calibration data not found in cache.\n");
+        return false;
+    }
+    
+
     cv::namedWindow("Left");
     cv::moveWindow("Left", 450, 100);
     cv::namedWindow("Right");
     cv::moveWindow("Right", 850, 100);
 
-   cv::Ptr<cv::StereoBM> bm = cv::StereoBM::create(16,9);
 
-    if (SWS < 5)
-        SWS = 5;
-    if (SWS % 2 == 0)
-        SWS += 1;
-    if (SWS > 80)
-        SWS = 79;
-
-    if (numOfDisp % 16 != 0)
-    {
-        numOfDisp -= (numOfDisp % 16);
-    }
-
-    bm->setPreFilterCap(preFiltCap);
-    bm->setBlockSize(SWS);
-    bm->setMinDisparity(minDisp);
-    bm->setNumDisparities(numOfDisp);
-    bm->setTextureThreshold(TxtrThrshld);
-    bm->setUniquenessRatio(unicRatio);
-    bm->setSpeckleWindowSize(SpklWinSze);
-    bm->setSpeckleRange(SpcklRng);
-    bm->setDisp12MaxDiff(1);
 
     float  time1 = 0, time2 = 0, time3 = 0, time4 = 0, time5 = 0, time6 = 0, time7 = 0, time8 = 0, time9 = 0, time10 = 0, time11 = 0;
     int frameNumber = 0;
     
-    // while ((count = fread(buf, sizeof(*buf), bufLen, fp)) != 0)
-    // {
+    apriltag_family_t *tf = NULL;
+
+
     while (true)
     {
         fseek(fp, -bufLen, SEEK_END);
@@ -182,50 +143,45 @@ int main()
    
         cv::Mat frame(imgHeight, imgWidth, CV_8UC1, buf);
 
-	long long timeReadFrame = getTimestamp();
-	time1 += timeReadFrame - starttime;
+        long long timeReadFrame = getTimestamp();
+        time1 += timeReadFrame - starttime;
 	
         cv::Mat left = cv::Mat(frame, cv::Rect(0, 0, imgWidth / 2, imgHeight));
         cv::Mat right = cv::Mat(frame, cv::Rect(imgWidth / 2, 0, imgWidth / 2, imgHeight));
 
-	long long timeSplitLeftRight = getTimestamp();
-	time2 += timeSplitLeftRight - timeReadFrame;
+        long long timeSplitLeftRight = getTimestamp();
+        time2 += timeSplitLeftRight - timeReadFrame;
 
 	
         // Rectifying left and right images
         cv::remap(left, left, leftMapX, leftMapY, cv::INTER_LINEAR);
         cv::remap(right, right, rightMapX, rightMapY, cv::INTER_LINEAR);
 
-	long long timeRectify = getTimestamp();
-	time3 += timeRectify - timeSplitLeftRight;
+        long long timeRectify = getTimestamp();
+        time3 += timeRectify - timeSplitLeftRight;
        
         cv::imshow("Left", left);
         cv::imshow("Right", right);
 
-	long long timeShow = getTimestamp();
-	time4 += timeShow - timeRectify;
+        long long timeShow = getTimestamp();
+        time4 += timeShow - timeRectify;
+
+    
 
 	
-		// Taking a strip from our image for lidar-like mode (and saving CPU)
-        // cv::Mat imgLCut = cv::Mat(left, cv::Rect(0, 80, left.cols, 80));
-        // cv::Mat imgRCut = cv::Mat(right, cv::Rect(0, 80, right.cols, 80));
-
-	// cv::resize(left, left, cv::Size(176, 132));
-	// cv::resize(right, right, cv::Size(176, 132));
+        long long timeStrip = getTimestamp();
+        time5 += timeStrip - timeShow;
 	
-	long long timeStrip = getTimestamp();
-	time5 += timeStrip - timeShow;
-	
-        bool depth = stereo_depth_map(left, right, bm, time8, time9, time10, time11);
 
-	long long timeDepth = getTimestamp();
-	time6 += timeDepth - timeStrip;
+        long long timeDepth = getTimestamp();
+        time6 += timeDepth - timeStrip;
 
-	time7 += timeDepth - starttime;
+        time7 += timeDepth - starttime;
 	
-	frameNumber++;
-	if (!depth)
-	  break;
+        frameNumber++;
+
+
+
     }
 
     time1 = time1 / (frameNumber * 1000);

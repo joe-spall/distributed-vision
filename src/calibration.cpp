@@ -44,8 +44,7 @@ int img_width = 320;
 int img_height = 240;
 
 // Global settings
-std::string folder_name = "/home/pi/stereopi-cpp-tutorial/";
-std::string calibration_data_folder = folder_name + "calibration_data/";  
+std::string folder_name = "/home/pi/distributed-vision/calibration_data/";
 
 void calibrate_one_camera(std::vector<std::vector<cv::Vec3f> > objpoints, std::vector<std::vector<cv::Vec2f> > imgpoints, std::string right_or_left)
 {
@@ -68,97 +67,13 @@ void calibrate_one_camera(std::vector<std::vector<cv::Vec3f> > objpoints, std::v
     cv::fisheye::initUndistortRectifyMap(K, D, pt, K, DIM, CV_16SC2, map1, map2);
 
     // Now we'll write our results to the file for the future use
-    cv::FileStorage fs(calibration_data_folder + "calibration_camera_" + std::to_string(img_height) + "_" + right_or_left + ".yml", cv::FileStorage::WRITE);
+    cv::FileStorage fs(folder_name + "calibration_camera_" + std::to_string(img_height) + "_" + right_or_left + ".yml", cv::FileStorage::WRITE);
     if (fs.isOpened())
     {
         fs << "map1" << map1 << "map2" << map2 << "objpoints" << objpoints << "imgpoints" <<
               imgpoints << "camera_matrix" << K << "distortion_coeff" << D;
     }
 
-
-}
-
-bool calibrate_stereo_cameras(int res_x = img_width, int res_y = img_height)
-{
-    std::vector<std::vector<cv::Vec3f> > objectPoints;
-
-    std::vector<std::vector<cv::Vec2f> >rightImagePoints;
-    cv::Mat rightCameraMatrix;
-    cv::Mat rightDistortionCoefficients;
-
-    std::vector<std::vector<cv::Vec2f> > leftImagePoints;
-    cv::Mat leftCameraMatrix;
-    cv::Mat leftDistortionCoefficients;
-
-    cv::Mat rotationMatrix;
-    cv::Mat translationVector;
-
-    cv::Size imageSize(res_x, res_y);
-
-    cv::TermCriteria TERMINATION_CRITERIA(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, 0.01);
-    std::string right_or_left = "";
-
-    for (int i = 0; i <= 1; i++)
-    {
-        if (i == 0)
-            right_or_left = "left";
-        else
-            right_or_left = "right";
-
-        cv::FileStorage fs(calibration_data_folder + "calibration_camera_" + std::to_string(img_height) + "_" + right_or_left + ".yml", cv::FileStorage::READ);
-        if (fs.isOpened())
-        {
-            cv::Mat map1, map2;
-            fs["map1"] >> map1;
-            fs["map2"] >> map2;
-            fs["objpoints"] >> objectPoints;
-            if (right_or_left == "left")
-            {
-                fs["imgpoints"] >> leftImagePoints;
-                fs["camera_matrix"] >> leftCameraMatrix;
-                fs["distortion_coeff"] >> leftDistortionCoefficients;
-            }
-            else
-            {
-                fs["imgpoints"] >> rightImagePoints;
-                fs["camera_matrix"] >> rightCameraMatrix;
-                fs["distortion_coeff"] >> rightDistortionCoefficients;
-            }
-            fs.release();
-        }
-        else
-        {
-            fprintf(stderr, "Camera calibration data not found in cache.\n");
-            return false;
-        }
-    }
-    fprintf(stderr, "Calibrating cameras together...\n");
-    int fisheyeFlags = 0;
-    fisheyeFlags |= cv::fisheye::CALIB_FIX_INTRINSIC;
-    //fisheyeFlags &= cv::fisheye::CALIB_CHECK_COND;
-    double rms = cv::fisheye::stereoCalibrate(objectPoints, leftImagePoints, rightImagePoints, leftCameraMatrix, leftDistortionCoefficients,
-                                              rightCameraMatrix, rightDistortionCoefficients, imageSize, rotationMatrix, translationVector,
-                                              fisheyeFlags, TERMINATION_CRITERIA);
-
-    fprintf(stderr, "<><><><><><><><><><><><><><>\n");
-    fprintf(stderr, "<><><> RMS is %f <><><><><><>\n", rms);
-    fprintf(stderr, "<><><><><><><><><><><><><><>\n");
-
-    cv::Mat R1, R2, P1, P2, Q;
-    cv::fisheye::stereoRectify(leftCameraMatrix, leftDistortionCoefficients, rightCameraMatrix, rightDistortionCoefficients,
-                               imageSize, rotationMatrix, translationVector, R1, R2, P1, P2, Q, cv::CALIB_ZERO_DISPARITY, cv::Size(0, 0), 0, 0);
-    fprintf(stderr, "Saving calibration...\n");
-    cv::Mat leftMapX, leftMapY, rightMapX, rightMapY;
-    cv::fisheye::initUndistortRectifyMap(leftCameraMatrix, leftDistortionCoefficients, R1, P1, imageSize, CV_16SC2, leftMapX, leftMapY);
-    cv::fisheye::initUndistortRectifyMap(rightCameraMatrix, rightDistortionCoefficients, R2, P2, imageSize, CV_16SC2, rightMapX, rightMapY);
-
-    cv::FileStorage fsWrite(calibration_data_folder + "stereo_camera_calibration" + std::to_string(img_height) + ".yml", cv::FileStorage::WRITE);
-    if (fsWrite.isOpened())
-        fsWrite << "imageSize" << imageSize << "leftMapX" << leftMapX << "leftMapY" << leftMapY << "rightMapX" << rightMapX <<
-                   "rightMapY" << rightMapY << "disparityToDepthMap" << Q;
-
-
-    return true;
 
 }
 
@@ -291,8 +206,6 @@ int main()
     calibrate_one_camera(objpointsLeft, imgpointsLeft, "left");
     fprintf(stderr, "Right camera calibration...\n");
     calibrate_one_camera(objpointsRight, imgpointsRight, "right");
-    fprintf(stderr, "Stereoscopic calibration...\n");
-    bool result = calibrate_stereo_cameras();
     fprintf(stderr, "Calibration complete!\n");
 
     // The following code just shows you calibration results
@@ -304,7 +217,7 @@ int main()
         cv::Mat map1, map2;
 
         fprintf(stderr, "Undistorting picture with width = %d, height = %d\n", width, height);
-        cv::FileStorage fsLeft(calibration_data_folder + "calibration_camera_" + std::to_string(img_height) + "_left" + ".yml", cv::FileStorage::READ);
+        cv::FileStorage fsLeft(folder_name + "calibration_camera_" + std::to_string(img_height) + "_left" + ".yml", cv::FileStorage::READ);
         if (fsLeft.isOpened())
         {
             fsLeft["map1"] >> map1;
@@ -320,7 +233,7 @@ int main()
         cv::Mat undistorted_left;
         cv::remap(gray_small_left, undistorted_left, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
 
-        cv::FileStorage fsRight(calibration_data_folder + "calibration_camera_" + std::to_string(img_height) + "_right" + ".yml", cv::FileStorage::READ);
+        cv::FileStorage fsRight(folder_name + "calibration_camera_" + std::to_string(img_height) + "_right" + ".yml", cv::FileStorage::READ);
         if (fsRight.isOpened())
         {
             fsRight["map1"] >> map1;
@@ -346,48 +259,6 @@ int main()
         }
 
     }
-
-    if (showStereoRectificationResults)
-    {
-        // lets rectify pair and look at the result
-
-        // NOTICE: we use 320x240 as a working resolution, regardless of
-        // calibration images resolution. So 320x240 parameters are hardcoded
-        // now.
-        cv::FileStorage fsStereo(calibration_data_folder + "stereo_camera_calibration" + std::to_string(img_height) + ".yml", cv::FileStorage::READ);
-        if (!fsStereo.isOpened())
-        {
-            fprintf(stderr, "Camera calibration data not found in cache\n");
-            exit(1);
-        }
-        cv::Mat leftMapX, leftMapY, rightMapX, rightMapY;
-        fsStereo["leftMapX"] >> leftMapX;
-        fsStereo["leftMapY"] >> leftMapY;
-        fsStereo["rightMapX"] >> rightMapX;
-        fsStereo["rightMapY"] >> rightMapY;
-
-        cv::Mat imgPair = cv::imread(imageToDisp);
-        if (imgPair.empty())
-        {
-            fprintf(stderr, "Cannot load image!\n");
-            exit(1);
-        }
-        cv::resize(imgPair, imgPair, cv::Size(640, 240), cv::INTER_CUBIC);
-
-        cv::Mat imgL = cv::Mat(imgPair, cv::Rect(0, 0, 320, 240));
-        cv::Mat imgR = cv::Mat(imgPair, cv::Rect(320, 0, 320, 240));
-
-        // Rectifying left and right images
-        cv::remap(imgL, imgL, leftMapX, leftMapY, cv::INTER_LINEAR);
-        cv::remap(imgR, imgR, rightMapX, rightMapY, cv::INTER_LINEAR);
-
-        cv::imshow("Left STEREO CALIBRATED", imgL);
-        cv::imshow("Right STEREO CALIBRATED", imgR);
-        cv::imwrite("rectifyed_left.jpg", imgL);
-        cv::imwrite("rectifyed_right.jpg", imgR);
-        cv::waitKey(0);
-    }
-
 
     return 0;
 }
