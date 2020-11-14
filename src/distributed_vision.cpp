@@ -19,22 +19,15 @@
 // If not, see <http://www.gnu.org/licenses/>.
 //
 
-#include <opencv2/calib3d.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
 extern "C" {
-#include "apriltag.h"
-#include "tag36h11.h"
-#include "tag25h9.h"
-#include "tag16h5.h"
-#include "tagCircle21h7.h"
-#include "tagCircle49h12.h"
-#include "tagCustom48h12.h"
-#include "tagStandard41h12.h"
-#include "tagStandard52h13.h"
-#include "common/getopt.h"
+#include <apriltag.h>
+#include <tag36h11.h>
+#include <common/getopt.h>
+#include <apriltag_pose.h>
 }
 
 
@@ -48,19 +41,70 @@ extern "C" {
 #include <stdlib.h>
 #include <ctype.h>
 
+#include <sys/types.h> 
 
-int threads = 1;
+
+#ifdef _WIN32
+/* See http://stackoverflow.com/questions/12765743/getaddrinfo-on-win32 */
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0501  /* Windows XP. */
+#endif
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#include <winsock2.h>
+#include <Ws2tcpip.h>
+
+#pragma comment (lib, "Ws2_32.lib")
+#else
+/* Assume that any non-Windows platform uses POSIX-style sockets instead. */
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netdb.h>  /* Needed for getaddrinfo() and freeaddrinfo() */
+#include <unistd.h> /* Needed for close() */
+
+typedef int SOCKET;
+#endif
+
+
+
+
+struct TagPacket{
+
+    int id;
+    double x;
+    double y;
+    double z;
+
+
+};
+
+
+
+#define PI 3.14159
+#define PORT_NUM 30000
+#define SA struct sockaddr 
+
+std::string TARGET_ADDRESS = "192.168.1.209";
+
+int threads = 2;
 std::string family = "tag36h11";
-double decimate = 2.0;
-double blur = 0.0;
+double decimate = 1;
+double blur = 0.8;
 bool refine_edges = true;
+bool debug = false;
 
-
+int imgHeight = 240; // Pixels
+int imgWidth = 640;  // Pixels
+int FOV = 194; // Degrees
+float tagsize = 0.12; // meters
+double cameraCenterX = float(imgWidth)/2.0;
+double cameraCenterY = float(imgHeight)/2.0;
+double focal_pixel = (imgWidth * 0.5) / tan(FOV * 0.5 * PI/180); // Pixels
 
 float actualFPS = 0.0;
 
 // Global settings
-std::string folder_name = "/home/pi/stereopi-cpp-tutorial/";
+std::string folder_name = "/home/pi/distributed-vision/";
 std::string calibration_data_folder = folder_name + "calibration_data/"; 
 
 long long getTimestamp() {
@@ -69,13 +113,173 @@ long long getTimestamp() {
     return  epoch.count();
 }
 
+int sockInit(void)
+{
+#ifdef _WIN32
+    WSADATA wsa_data;
+    return WSAStartup(MAKEWORD(1, 1), &wsa_data);
+#else
+    return 0;
+#endif
+}
+
+int sockQuit(void)
+{
+#ifdef _WIN32
+    return WSACleanup();
+#else
+    return 0;
+#endif
+}
+
+/* Note: For POSIX, typedef SOCKET as an int. */
+
+int sockClose(SOCKET sock)
+{
+
+    int status = 0;
+
+#ifdef _WIN32
+    status = shutdown(sock, SD_BOTH);
+    if (status == 0)
+    {
+        status = closesocket(sock);
+    }
+#else
+    status = shutdown(sock, SHUT_RDWR);
+    if (status == 0)
+    {
+        status = close(sock);
+    }
+#endif
+
+    return status;
+
+}
+
+void sendPacket(std::vector<TagPacket> vec, SOCKET sockfd)
+{
+    socklen_t toLen = sizeof(struct sockaddr_in);
+    struct sockaddr_in toInfo;
+
+    //Generate the packet string
+    char buffer[80] = {0};
+    std::string packet = "$";
+    if(vec.size()>0)
+    {
+        for (auto &it :vec)
+        {
+            packet.append("id:");
+            packet.append(std::to_string(it.id));
+            packet.append(",x:");
+            packet.append(std::to_string(it.x));
+            packet.append(",y:");
+            packet.append(std::to_string(it.y));
+            packet.append(",z:");
+            packet.append(std::to_string(it.z));
+            packet.append("|");
+        
+        }
+        packet.pop_back(); // Remove extra | at the end
+    }
+
+    std::cout << "Sending: " << packet << std::endl;
+    strcpy(buffer,packet.c_str());
+    write(sockfd, buffer, sizeof(buffer)); 
+
+}
+
+
+std::vector<TagPacket> labelAprilTags(apriltag_detector_t &td, cv::Mat &picture)
+{
+    // Make an image_u8_t header for the Mat data
+        image_u8_t im = { .width = picture.cols,
+            .height = picture.rows,
+            .stride = picture.cols,
+            .buf = picture.data
+        };
+
+        zarray_t *detections = apriltag_detector_detect(&td, &im);
+        std::vector<TagPacket> tagPose;
+        // Draw detection outlines
+        for (int i = 0; i < zarray_size(detections); i++) {
+            apriltag_detection_t *det;
+            zarray_get(detections, i, &det);
+            
+            cv::line(picture, cv::Point(det->p[0][0], det->p[0][1]),
+                     cv::Point(det->p[1][0], det->p[1][1]),
+                     cv::Scalar(0, 0xff, 0), 2);
+            cv::line(picture, cv::Point(det->p[0][0], det->p[0][1]),
+                     cv::Point(det->p[3][0], det->p[3][1]),
+                     cv::Scalar(0, 0, 0xff), 2);
+            cv::line(picture, cv::Point(det->p[1][0], det->p[1][1]),
+                     cv::Point(det->p[2][0], det->p[2][1]),
+                     cv::Scalar(0xff, 0, 0), 2);
+            cv::line(picture, cv::Point(det->p[2][0], det->p[2][1]),
+                     cv::Point(det->p[3][0], det->p[3][1]),
+                     cv::Scalar(0xff, 0, 0), 2);
+
+            apriltag_detection_info_t info;
+            info.det = det;
+            info.tagsize = tagsize;
+            info.fx = focal_pixel;
+            info.fy = focal_pixel;
+            info.cx = cameraCenterX;
+            info.cy = cameraCenterY;
+
+            // Then call estimate_tag_pose.
+            apriltag_pose_t pose;
+            double err = estimate_tag_pose(&info, &pose);
+                
+            double x = round( pose.t->data[0] * 1000.0 ) / 1000.0;
+            double y = round( pose.t->data[1] * 1000.0 ) / 1000.0;
+            double z = round( pose.t->data[2] * 1000.0 ) / 1000.0;
+            
+
+            std::stringstream ss;
+            ss << det->id;
+            std::string tagText = ss.str();
+            int tagNumber = std::stoi (tagText,nullptr,0);
+            
+            std::cout << "id:" << tagNumber << ",x:" << x << ",y:" << y << ",z:" << z << std::endl;
+
+            TagPacket foundTag = {tagNumber, x, y,z};
+            
+            tagPose.push_back(foundTag);
+            int fontface = cv::FONT_HERSHEY_SCRIPT_SIMPLEX;
+            double fontscale = 1.0;
+            int baseline;
+            cv::Size textsize = cv::getTextSize(tagText, fontface, fontscale, 2,
+                                            &baseline);
+            cv::putText(picture, tagText, cv::Point(det->c[0]-textsize.width/2,
+                                       det->c[1]+textsize.height/2),
+                    fontface, fontscale, cv::Scalar(0xff, 0x99, 0), 2);
+        }
+        apriltag_detections_destroy(detections);
+        return tagPose;
+}
+
 
 int main()
 {
+    struct sockaddr_in servaddr, cli;
+    sockInit();
     
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     
-    int imgHeight = 240;
-    int imgWidth = 640;
+    // assign IP, PORT 
+    servaddr.sin_family = AF_INET; 
+    servaddr.sin_addr.s_addr = inet_addr(TARGET_ADDRESS.c_str()); 
+    servaddr.sin_port = htons(PORT_NUM); 
+  
+    // connect the client socket to server socket 
+    if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) { 
+        printf("connection with the server failed...\n"); 
+        exit(0); 
+    } 
+    else
+        printf("connected to the server..\n"); 
+   
 
     FILE *fp;
     if ((fp = fopen("/dev/stdin", "rb")) == NULL)
@@ -91,17 +295,19 @@ int main()
     // Loads callibration
     cv::Mat map1, map2;
 
-    cv::Mat leftMapX, leftMapY, rightMapX, rightMapY;
+    cv::Mat frontMapX, frontMapY, backMapX, backMapY;
 
     cv::FileStorage fsFront(calibration_data_folder + "calibration_camera_" + std::to_string(imgHeight) + "_front" + ".yml", cv::FileStorage::READ);
     if (fsFront.isOpened())
     {
-        fsFront["map1"] >> leftMapX;
-        fsFront["map2"] >> leftMapY;
+        fsFront["map1"] >> frontMapX;
+        fsFront["map2"] >> frontMapY;
         fsFront.release();
     }
     else
-    {
+    {   
+        std::string frontFile = calibration_data_folder + "calibration_camera_" + std::to_string(imgHeight) + "_front" + ".yml";
+        fprintf(stderr, frontFile.c_str());
         fprintf(stderr, "Front camera calibration data not found in cache.\n");
         return false;
     }
@@ -109,21 +315,23 @@ int main()
     cv::FileStorage fsBack(calibration_data_folder + "calibration_camera_" + std::to_string(imgHeight) + "_back" + ".yml", cv::FileStorage::READ);
     if (fsBack.isOpened())
     {
-        fsBack["map1"] >> rightMapX;
-        fsBack["map2"] >> rightMapY;
+        fsBack["map1"] >> backMapX;
+        fsBack["map2"] >> backMapY;
         fsBack.release();
     }
     else
     {
+        std::string backFile = calibration_data_folder + "calibration_camera_" + std::to_string(imgHeight) + "_back" + ".yml";
+        fprintf(stderr, backFile.c_str());
         fprintf(stderr, "Back camera calibration data not found in cache.\n");
         return false;
     }
     
 
-    cv::namedWindow("Left");
-    cv::moveWindow("Left", 450, 100);
-    cv::namedWindow("Right");
-    cv::moveWindow("Right", 850, 100);
+    cv::namedWindow("Front");
+    cv::moveWindow("Front", 450, 100);
+    //cv::namedWindow("Back");
+    //cv::moveWindow("Back", 850, 100);
 
 
 
@@ -131,7 +339,16 @@ int main()
     int frameNumber = 0;
     
     apriltag_family_t *tf = NULL;
-
+    tf = tag36h11_create();
+    apriltag_detector_t *td = apriltag_detector_create();
+    apriltag_detector_add_family(td, tf);
+    
+    
+    td->quad_decimate = decimate;
+    td->quad_sigma = blur;
+    td->nthreads = threads;
+    td->debug = debug;
+    td->refine_edges = refine_edges;
 
     while (true)
     {
@@ -146,41 +363,44 @@ int main()
         long long timeReadFrame = getTimestamp();
         time1 += timeReadFrame - starttime;
 	
-        cv::Mat left = cv::Mat(frame, cv::Rect(0, 0, imgWidth / 2, imgHeight));
-        cv::Mat right = cv::Mat(frame, cv::Rect(imgWidth / 2, 0, imgWidth / 2, imgHeight));
+        cv::Mat front = cv::Mat(frame, cv::Rect(0, 0, imgWidth / 2, imgHeight));
+        //cv::Mat back = cv::Mat(frame, cv::Rect(imgWidth / 2, 0, imgWidth / 2, imgHeight));
 
         long long timeSplitLeftRight = getTimestamp();
         time2 += timeSplitLeftRight - timeReadFrame;
 
+        
+
 	
         // Rectifying left and right images
-        cv::remap(left, left, leftMapX, leftMapY, cv::INTER_LINEAR);
-        cv::remap(right, right, rightMapX, rightMapY, cv::INTER_LINEAR);
+        cv::remap(front, front, frontMapX, frontMapY, cv::INTER_LINEAR);
+        //cv::remap(back, back, backMapX, backMapY, cv::INTER_LINEAR);
 
         long long timeRectify = getTimestamp();
         time3 += timeRectify - timeSplitLeftRight;
        
-        cv::imshow("Left", left);
-        cv::imshow("Right", right);
+
 
         long long timeShow = getTimestamp();
         time4 += timeShow - timeRectify;
 
-    
-
+        std::vector<TagPacket> tags = labelAprilTags(*td,front);
+ 
+        sendPacket(tags,sockfd);
+        
+        //labelAprilTags(*td,back);
+        
+        cv::imshow("Front", front);
+        //cv::imshow("Back", back);
 	
-        long long timeStrip = getTimestamp();
-        time5 += timeStrip - timeShow;
-	
-
-        long long timeDepth = getTimestamp();
-        time6 += timeDepth - timeStrip;
-
-        time7 += timeDepth - starttime;
 	
         frameNumber++;
 
-
+        char k = cv::waitKey(1);
+        if (k == 'q' || k == 'Q')
+        {
+            break;
+        }
 
     }
 
