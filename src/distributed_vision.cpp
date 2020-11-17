@@ -69,24 +69,27 @@ typedef int SOCKET;
 
 
 struct TagPacket{
-
     int id;
     double x;
     double y;
     double z;
-
-
 };
 
 
 
 #define PI 3.14159
 #define PORT_NUM 30000
+#define NET_BUFFER 1024
 #define SA struct sockaddr 
 
 std::string TARGET_ADDRESS = "192.168.1.209";
+int lastSentId = 99;
+double lastSentX = 99;
+double lastSentY = 99;
+double lastSentZ = 99;
+int lastSentSize = 99;
 
-int threads = 2;
+int threads = 1;
 std::string family = "tag36h11";
 double decimate = 1;
 double blur = 0.8;
@@ -102,6 +105,8 @@ double cameraCenterY = float(imgHeight)/2.0;
 double focal_pixel = (imgWidth * 0.5) / tan(FOV * 0.5 * PI/180); // Pixels
 
 float actualFPS = 0.0;
+
+
 
 // Global settings
 std::string folder_name = "/home/pi/distributed-vision/";
@@ -157,40 +162,95 @@ int sockClose(SOCKET sock)
 
 }
 
+bool isVecTagPacketSame(std::vector<TagPacket> vec)
+{
+    bool sameSize = vec.size() == lastSentSize;
+    if(!sameSize)
+    {
+        return false;
+    }
+    bool sameLastId = false;
+    bool sameLastX = false;
+    bool sameLastY = false;
+    bool sameLastZ = false;
+    if(vec.size() > 0)
+    {
+        sameLastId = vec[0].id == lastSentId;
+        if(!sameLastId)
+        {
+            return false;
+        }
+        
+        sameLastX = vec[0].x == lastSentX;
+        if(!sameLastX)
+        {
+            return false;
+        }
+        
+        sameLastY = vec[0].y == lastSentY;
+        if(!sameLastY)
+        {
+            return false;
+        }
+        
+        sameLastZ = vec[0].z == lastSentZ;
+        if(!sameLastZ)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 void sendPacket(std::vector<TagPacket> vec, SOCKET sockfd)
 {
-    socklen_t toLen = sizeof(struct sockaddr_in);
-    struct sockaddr_in toInfo;
-
-    //Generate the packet string
-    char buffer[80] = {0};
-    std::string packet = "$";
-    if(vec.size()>0)
+    if(!isVecTagPacketSame(vec))
     {
-        for (auto &it :vec)
+        socklen_t toLen = sizeof(struct sockaddr_in);
+        struct sockaddr_in toInfo;
+
+        //Generate the packet string
+        char buffer[NET_BUFFER] = {0};
+        std::string packet = "$";
+        if(vec.size()>0)
         {
-            packet.append("id:");
-            packet.append(std::to_string(it.id));
-            packet.append(",x:");
-            packet.append(std::to_string(it.x));
-            packet.append(",y:");
-            packet.append(std::to_string(it.y));
-            packet.append(",z:");
-            packet.append(std::to_string(it.z));
-            packet.append("|");
+            for (auto &it :vec)
+            {
+                packet.append("id:");
+                packet.append(std::to_string(it.id));
+                packet.append(",x:");
+                packet.append(std::to_string(it.x));
+                packet.append(",y:");
+                packet.append(std::to_string(it.y));
+                packet.append(",z:");
+                packet.append(std::to_string(it.z));
+                packet.append("|");
         
+            }
+            packet.pop_back(); // Remove extra | at the end
         }
-        packet.pop_back(); // Remove extra | at the end
+
+        std::cout << "Sending: " << packet << std::endl;
+        strcpy(buffer,packet.c_str());
+        write(sockfd, buffer, sizeof(buffer));
+        
+        // Keep track of last item
+        lastSentSize = vec.size();
+        
+        if(vec.size() > 0)
+        {
+            lastSentId = vec[0].id;
+            lastSentX = vec[0].x;
+            lastSentY = vec[0].y;
+            lastSentZ = vec[0].z;
+        }
     }
 
-    std::cout << "Sending: " << packet << std::endl;
-    strcpy(buffer,packet.c_str());
-    write(sockfd, buffer, sizeof(buffer)); 
 
 }
 
 
-std::vector<TagPacket> labelAprilTags(apriltag_detector_t &td, cv::Mat &picture)
+std::vector<TagPacket> labelAprilTags(apriltag_detector_t &td, cv::Mat &picture, bool isFront)
 {
     // Make an image_u8_t header for the Mat data
         image_u8_t im = { .width = picture.cols,
@@ -211,7 +271,7 @@ std::vector<TagPacket> labelAprilTags(apriltag_detector_t &td, cv::Mat &picture)
                      cv::Scalar(0, 0xff, 0), 2);
             cv::line(picture, cv::Point(det->p[0][0], det->p[0][1]),
                      cv::Point(det->p[3][0], det->p[3][1]),
-                     cv::Scalar(0, 0, 0xff), 2);
+                    cv::Scalar(0, 0, 0xff), 2);
             cv::line(picture, cv::Point(det->p[1][0], det->p[1][1]),
                      cv::Point(det->p[2][0], det->p[2][1]),
                      cv::Scalar(0xff, 0, 0), 2);
@@ -230,10 +290,18 @@ std::vector<TagPacket> labelAprilTags(apriltag_detector_t &td, cv::Mat &picture)
             // Then call estimate_tag_pose.
             apriltag_pose_t pose;
             double err = estimate_tag_pose(&info, &pose);
-                
+            
             double x = round( pose.t->data[0] * 1000.0 ) / 1000.0;
             double y = round( pose.t->data[1] * 1000.0 ) / 1000.0;
             double z = round( pose.t->data[2] * 1000.0 ) / 1000.0;
+            
+            // If from the behind camera, invert x and z to maintain a robot coordinate plane
+            if(!isFront)
+            {
+                x = 2 - x;
+                z*=-1;
+            }
+            
             
 
             std::stringstream ss;
@@ -241,11 +309,12 @@ std::vector<TagPacket> labelAprilTags(apriltag_detector_t &td, cv::Mat &picture)
             std::string tagText = ss.str();
             int tagNumber = std::stoi (tagText,nullptr,0);
             
-            std::cout << "id:" << tagNumber << ",x:" << x << ",y:" << y << ",z:" << z << std::endl;
+            //std::cout << "id:" << tagNumber << ",x:" << x << ",y:" << y << ",z:" << z << std::endl;
 
             TagPacket foundTag = {tagNumber, x, y,z};
             
             tagPose.push_back(foundTag);
+            
             int fontface = cv::FONT_HERSHEY_SCRIPT_SIMPLEX;
             double fontscale = 1.0;
             int baseline;
@@ -271,14 +340,18 @@ int main()
     servaddr.sin_family = AF_INET; 
     servaddr.sin_addr.s_addr = inet_addr(TARGET_ADDRESS.c_str()); 
     servaddr.sin_port = htons(PORT_NUM); 
+    bool networkConnected = false
   
     // connect the client socket to server socket 
     if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) { 
         printf("connection with the server failed...\n"); 
-        exit(0); 
+        //exit(0); 
     } 
     else
+    {
         printf("connected to the server..\n"); 
+        networkConnected = true;
+    }
    
 
     FILE *fp;
@@ -330,8 +403,8 @@ int main()
 
     cv::namedWindow("Front");
     cv::moveWindow("Front", 450, 100);
-    //cv::namedWindow("Back");
-    //cv::moveWindow("Back", 850, 100);
+    cv::namedWindow("Back");
+    cv::moveWindow("Back", 850, 100);
 
 
 
@@ -363,8 +436,13 @@ int main()
         long long timeReadFrame = getTimestamp();
         time1 += timeReadFrame - starttime;
 	
-        cv::Mat front = cv::Mat(frame, cv::Rect(0, 0, imgWidth / 2, imgHeight));
-        //cv::Mat back = cv::Mat(frame, cv::Rect(imgWidth / 2, 0, imgWidth / 2, imgHeight));
+        // Constrains region of interest
+        cv::Mat backTemp = cv::Mat(frame, cv::Rect(0, 0, imgWidth / 2, imgHeight));
+        cv::Mat frontTemp = cv::Mat(frame, cv::Rect(imgWidth / 2, 0, imgWidth / 2, imgHeight));
+        
+        // Makes deep copy of image data to a new array
+        cv::Mat front = frontTemp.clone();
+        cv::Mat back = backTemp.clone();
 
         long long timeSplitLeftRight = getTimestamp();
         time2 += timeSplitLeftRight - timeReadFrame;
@@ -374,7 +452,7 @@ int main()
 	
         // Rectifying left and right images
         cv::remap(front, front, frontMapX, frontMapY, cv::INTER_LINEAR);
-        //cv::remap(back, back, backMapX, backMapY, cv::INTER_LINEAR);
+        cv::remap(back, back, backMapX, backMapY, cv::INTER_LINEAR);
 
         long long timeRectify = getTimestamp();
         time3 += timeRectify - timeSplitLeftRight;
@@ -384,14 +462,26 @@ int main()
         long long timeShow = getTimestamp();
         time4 += timeShow - timeRectify;
 
-        std::vector<TagPacket> tags = labelAprilTags(*td,front);
- 
-        sendPacket(tags,sockfd);
+        std::vector<TagPacket> tags;
+        std::vector<TagPacket> frontTags = labelAprilTags(*td,front,true);
+        std::vector<TagPacket> backTags = labelAprilTags(*td,back,false);
+        for(const auto& foundTag: frontTags) {
+            tags.push_back(foundTag);
+        }
         
-        //labelAprilTags(*td,back);
+        for(const auto& foundTag: backTags) {
+            tags.push_back(foundTag);
+        }
+ 
+        if(networkConnected)
+        {
+            sendPacket(tags,sockfd);
+        }   
+        
+        
         
         cv::imshow("Front", front);
-        //cv::imshow("Back", back);
+        cv::imshow("Back", back);
 	
 	
         frameNumber++;
