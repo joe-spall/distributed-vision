@@ -59,7 +59,7 @@ def draw_point(hmap, idx):
     id_point = hmap.id[idx]
     for dx in range(-1,2):
         for dy in range(-1,2):
-            if x_point+dx < hmap.width and x_point+dx >= 0 and y_point+dx < hmap.width and y_point+dx >= 0: 
+            if x_point+dx < hmap.width and x_point+dx >= 0 and y_point+dx < hmap.width and y_point+dx >= 0 and abs(dx+dy) < 2: 
                 hmap.matrix.SetPixel(x_point+dx, y_point+dy, hmap.color_map[id_point][0], \
                     hmap.color_map[id_point][1], hmap.color_map[id_point][2])
 
@@ -85,13 +85,14 @@ if __name__ == "__main__":
     hmap.y_grid = np.linspace(-hmap.max_meters, hmap.max_meters, hmap.matrix.height)
     print(hmap.x_grid)
     print(hmap.y_grid)
+    draw(hmap)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind((my_ip, 30000))
     sock.listen(5)
     (conn, addr) = sock.accept()
     print(f"{conn} | {addr}")
     while True:
-        data = conn.recv(80)
+        data = conn.recv(1024)
         data = data.decode("utf-8")
         data = data.rstrip("\x00")
         print(data)
@@ -99,21 +100,23 @@ if __name__ == "__main__":
         xs = []
         ys = []
         zs = []
+        if len(data) == 0:
+            continue
         if data[0] != '$':
-            print(data[0])
+            #print(data[0])
             continue
         tags = data[1:].strip().split('|')
         if '' in tags: tags.remove('')
-        print(tags)
+        #print(tags)
         for tag in tags:
             print(f"\t Doing Tag {tag}")
             fields = tag.strip().split(',')
             if '' in fields: fields.remove('')
-            print("\t {fields}")
+            #print("\t {fields}")
             if len(fields) == 0:
                 continue
             for field in fields:
-                print(f"\t\t Doing Field {field}")
+                #print(f"\t\t Doing Field {field}")
                 key,val = field.strip().split(':')
                 if key == 'x':
                     xs.append(float(val))
@@ -133,19 +136,19 @@ if __name__ == "__main__":
                 hmap.delete_life[i] -= 1
                 if hmap.delete_life[i] <= 0:
                     # need to remove apriltag that we no longer see
-                    print(f"Removing ID {hmap.id[i]}")
+                    #print(f"Removing ID {hmap.id[i]}")
                     ids_to_remove.append(hmap.id[i])
                     del hmap.color_map[hmap.id[i]]
             else:
                 # need to update x,y,z coordinate of existing april tag
-                print(f"Updating ID {hmap.id[i]}")
+                #print(f"Updating ID {hmap.id[i]}")
                 idx = ids.index(hmap.id[i])
                 hmap.x[i] = xs[idx]
                 hmap.y[i] = ys[idx]
                 hmap.z[i] = zs[idx]
-                hmap.delete_life[i] = 50
+                hmap.delete_life[i] = 15
         for i in range(len(ids_to_remove)):
-            print(f"Deleting ID {ids_to_remove[i]}")
+            #print(f"Deleting ID {ids_to_remove[i]}")
             idx = hmap.id.index(ids_to_remove[i])
             del hmap.id[idx]
             del hmap.x[idx]
@@ -153,16 +156,16 @@ if __name__ == "__main__":
             del hmap.z[idx]
             del hmap.delete_life[idx]
         for new_id in (set(ids) - set(hmap.id)):
-            print(f"Adding new ID {new_id}")
+            #print(f"Adding new ID {new_id}")
             idx = ids.index(new_id)
             hmap.id.append(new_id)
             hmap.x.append(xs[idx])
             hmap.y.append(ys[idx])
             hmap.z.append(zs[idx])
-            hmap.delete_life.append(50)
+            hmap.delete_life.append(15)
             for color in hmap.colors:
                 if color not in hmap.color_map.values():
-                    print(f"\t Getting color {color}")
+                    #print(f"\t Getting color {color}")
                     hmap.color_map[new_id] = color
                     break
         draw(hmap)
