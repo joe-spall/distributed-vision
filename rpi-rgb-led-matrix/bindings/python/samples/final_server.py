@@ -21,7 +21,7 @@ class HeatMap(SampleBase):
                 (255, 255, 0),
                 (0, 255, 255),
                 (255, 0, 255)]
-        self.max_meters = 1
+        self.max_meters = 0.5
 
     def run(self):
         self.width = self.matrix.width
@@ -52,14 +52,20 @@ class HeatMap(SampleBase):
 #       time.sleep(2)
 
 
-def draw_point(hmap, idx):
+def draw_point(hmap, idx, undraw=False):
     print(f"Drawing point {idx}")
     x_point = np.argmin(np.abs(hmap.x[idx] - hmap.x_grid))
     y_point = np.argmin(np.abs(hmap.y[idx] - hmap.y_grid))
     id_point = hmap.id[idx]
+    if undraw:
+        for dx in range(-1,2):
+            for dy in range(-1,2):
+                if x_point+dx < hmap.width and x_point+dx >= 0 and y_point+dx < hmap.width and y_point+dx >= 0: 
+                    hmap.matrix.SetPixel(x_point+dx, y_point+dy, 0, 0, 0)
+        return
     for dx in range(-1,2):
         for dy in range(-1,2):
-            if x_point+dx < hmap.width and x_point+dx >= 0 and y_point+dx < hmap.width and y_point+dx >= 0 and abs(dx+dy) < 2: 
+            if x_point+dx < hmap.width and x_point+dx >= 0 and y_point+dx < hmap.width and y_point+dx >= 0: 
                 hmap.matrix.SetPixel(x_point+dx, y_point+dy, hmap.color_map[id_point][0], \
                     hmap.color_map[id_point][1], hmap.color_map[id_point][2])
 
@@ -69,9 +75,10 @@ def draw(hmap):
         for y in range(0, hmap.height):
             if 29 < x < 35 and 29 < y < 35:
                 hmap.matrix.SetPixel(x, y, 255, 255, 255)
-            else:
-                hmap.matrix.SetPixel(x, y, 0, 0, 0)
-
+            elif 30 < x < 34 and y == 35:
+                hmap.matrix.SetPixel(x, y, 255, 255, 255)
+            elif 31 < x < 33 and y == 36:
+                hmap.matrix.SetPixel(x, y, 255, 255, 255)
     for i in range(len(hmap.id)):
         draw_point(hmap, i)
 
@@ -81,7 +88,7 @@ if __name__ == "__main__":
     hmap = HeatMap()
     if not hmap.process():
         hmap.print_help()
-    hmap.x_grid = np.linspace(-hmap.max_meters, hmap.max_meters, hmap.matrix.width)
+    hmap.x_grid = np.linspace(0, 4*hmap.max_meters, hmap.matrix.width)
     hmap.y_grid = np.linspace(-hmap.max_meters, hmap.max_meters, hmap.matrix.height)
     print(hmap.x_grid)
     print(hmap.y_grid)
@@ -143,13 +150,15 @@ if __name__ == "__main__":
                 # need to update x,y,z coordinate of existing april tag
                 #print(f"Updating ID {hmap.id[i]}")
                 idx = ids.index(hmap.id[i])
+                draw_point(hmap, i, True)
                 hmap.x[i] = xs[idx]
                 hmap.y[i] = ys[idx]
                 hmap.z[i] = zs[idx]
-                hmap.delete_life[i] = 15
+                hmap.delete_life[i] = 1
         for i in range(len(ids_to_remove)):
             #print(f"Deleting ID {ids_to_remove[i]}")
             idx = hmap.id.index(ids_to_remove[i])
+            draw_point(hmap, idx, True)
             del hmap.id[idx]
             del hmap.x[idx]
             del hmap.y[idx]
@@ -162,7 +171,7 @@ if __name__ == "__main__":
             hmap.x.append(xs[idx])
             hmap.y.append(ys[idx])
             hmap.z.append(zs[idx])
-            hmap.delete_life.append(15)
+            hmap.delete_life.append(1)
             for color in hmap.colors:
                 if color not in hmap.color_map.values():
                     #print(f"\t Getting color {color}")
