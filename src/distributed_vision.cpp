@@ -28,6 +28,7 @@ extern "C" {
 #include <tag36h11.h>
 #include <common/getopt.h>
 #include <apriltag_pose.h>
+
 }
 
 
@@ -42,7 +43,6 @@ extern "C" {
 #include <ctype.h>
 
 #include <sys/types.h> 
-
 
 #ifdef _WIN32
 /* See http://stackoverflow.com/questions/12765743/getaddrinfo-on-win32 */
@@ -66,8 +66,6 @@ typedef int SOCKET;
 #endif
 
 
-
-
 struct TagPacket{
     int id;
     double x;
@@ -84,6 +82,7 @@ struct TagPacket{
 
 std::string TARGET_ADDRESS = "192.168.1.209";
 int lastSentId = 99;
+const int RETRY_CAP = 100;
 double lastSentX = 99;
 double lastSentY = 99;
 double lastSentZ = 99;
@@ -111,6 +110,7 @@ float actualFPS = 0.0;
 // Global settings
 std::string folder_name = "/home/pi/distributed-vision/";
 std::string calibration_data_folder = folder_name + "calibration_data/"; 
+bool networkConnected = false;
 
 long long getTimestamp() {
     const std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
@@ -232,8 +232,13 @@ void sendPacket(std::vector<TagPacket> vec, SOCKET sockfd)
 
         std::cout << "Sending: " << packet << std::endl;
         strcpy(buffer,packet.c_str());
-        write(sockfd, buffer, sizeof(buffer));
+        int err = write(sockfd, buffer, sizeof(buffer));
         
+        if(err == -1)
+        {
+            std::cout << "Server disconnected" << std::endl;
+            networkConnected = false;
+        }
         // Keep track of last item
         lastSentSize = vec.size();
         
@@ -333,19 +338,18 @@ int main()
 {
     struct sockaddr_in servaddr, cli;
     sockInit();
-    
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     
     // assign IP, PORT 
     servaddr.sin_family = AF_INET; 
     servaddr.sin_addr.s_addr = inet_addr(TARGET_ADDRESS.c_str()); 
     servaddr.sin_port = htons(PORT_NUM); 
-    bool networkConnected = false
   
     // connect the client socket to server socket 
     if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) { 
         printf("connection with the server failed...\n"); 
-        //exit(0); 
+        networkConnected = false;
+
     } 
     else
     {
@@ -406,10 +410,8 @@ int main()
     cv::namedWindow("Back");
     cv::moveWindow("Back", 850, 100);
 
-
-
-    float  time1 = 0, time2 = 0, time3 = 0, time4 = 0, time5 = 0, time6 = 0, time7 = 0, time8 = 0, time9 = 0, time10 = 0, time11 = 0;
     int frameNumber = 0;
+    int retryCount = 0;
     
     apriltag_family_t *tf = NULL;
     tf = tag36h11_create();
@@ -429,12 +431,8 @@ int main()
         count = fread(buf, sizeof(*buf), bufLen, fp);
     	if (count == 0)
     	    break;
-        long long starttime = getTimestamp();
    
         cv::Mat frame(imgHeight, imgWidth, CV_8UC1, buf);
-
-        long long timeReadFrame = getTimestamp();
-        time1 += timeReadFrame - starttime;
 	
         // Constrains region of interest
         cv::Mat backTemp = cv::Mat(frame, cv::Rect(0, 0, imgWidth / 2, imgHeight));
@@ -443,24 +441,10 @@ int main()
         // Makes deep copy of image data to a new array
         cv::Mat front = frontTemp.clone();
         cv::Mat back = backTemp.clone();
-
-        long long timeSplitLeftRight = getTimestamp();
-        time2 += timeSplitLeftRight - timeReadFrame;
-
-        
-
 	
         // Rectifying left and right images
         cv::remap(front, front, frontMapX, frontMapY, cv::INTER_LINEAR);
         cv::remap(back, back, backMapX, backMapY, cv::INTER_LINEAR);
-
-        long long timeRectify = getTimestamp();
-        time3 += timeRectify - timeSplitLeftRight;
-       
-
-
-        long long timeShow = getTimestamp();
-        time4 += timeShow - timeRectify;
 
         std::vector<TagPacket> tags;
         std::vector<TagPacket> frontTags = labelAprilTags(*td,front,true);
@@ -473,12 +457,32 @@ int main()
             tags.push_back(foundTag);
         }
  
+ 
         if(networkConnected)
         {
             sendPacket(tags,sockfd);
-        }   
-        
-        
+            retryCount = 0;
+        }
+        else
+        {
+            if(retryCount > RETRY_CAP)
+            {
+                if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) { 
+                    std::cout<< "connection with the server failed..." << std::endl;
+                    networkConnected = false;
+                } 
+                else
+                {
+                    fprintf(stderr,"connected to the server..\n"); 
+                    networkConnected = true;
+                }
+                retryCount = 0;
+            }
+            else
+            {
+                retryCount++;
+            }
+        }
         
         cv::imshow("Front", front);
         cv::imshow("Back", back);
@@ -493,21 +497,6 @@ int main()
         }
 
     }
-
-    time1 = time1 / (frameNumber * 1000);
-    time2 = time2 / (frameNumber * 1000);
-    time3 = time3 / (frameNumber * 1000);
-    time4 = time4 / (frameNumber * 1000);
-    time5 = time5 / (frameNumber * 1000);
-    time6 = time6 / (frameNumber * 1000);
-    time7 = time7 / (frameNumber * 1000);
-    time8 = time8 / (frameNumber * 1000);
-    time9 = time9 / (frameNumber * 1000);
-    time10 = time10 / (frameNumber * 1000);
-    time11 = time11 / (frameNumber * 1000);
-    actualFPS = 1000.0/time7;
-
-    fprintf(stderr, "Avg time (milliseconds):\nread frame: %f\nsplit to left and right: %f\nrectify: %f\nshow left and right: %f\nget strips: %f\nget depth map: %f\ncompute map: %f\nconvert to uchar: %f\ncolorize: %f\nshow map: %f\ntotal: %f\nactual FPS: %f\n", time1, time2, time3, time4, time5, time6, time8, time9, time10, time11, time7, actualFPS);
     
     return 0;
 }
