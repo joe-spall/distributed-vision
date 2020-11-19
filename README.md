@@ -36,7 +36,7 @@ git clone https://github.com/joe-spall/distributed-vision.git
 git checkout server 
 ```
 
-From there you can start the server running by executing the file [final_server.py](https://github.com/joe-spall/distributed-vision/blob/server/rpi-rgb-led-matrix/bindings/python/samples/final_server.py) located in the directory `distributed-vision/rpi-rgb-led-matrix/bindings/python/samples/final_server.py`. To run the server properly for a 64x64 RGB Matrix, you need to use this bash command:
+From there you can start the server running by executing the file [final_server.py](https://github.com/joe-spall/distributed-vision/blob/server/rpi-rgb-led-matrix/bindings/python/samples/final_server.py) located in the directory `distributed-vision/rpi-rgb-led-matrix/bindings/python/samples/final_server.py`. Change the variable `my_ip` in `final_server.py` to reflect the actual IP of the Raspberry Pi Zero W on your local network. To run the server properly for a 64x64 RGB Matrix, you need to use this bash command:
 
 ```bash
 sudo ./final_server.py -r 64 --led-cols 64
@@ -49,12 +49,20 @@ These are some sample photos of our setup.
 
 | Example Photos |
 | -------------- |
-| ![Power Supply Brick](https://photos.google.com/share/AF1QipNsIqyeEHIrXT9VP8A1IKr34ptzQHY_JPHF02mI6lNcXrIQbD_YwltlO2YAApMyZw/photo/AF1QipOaRkycxnqihjz6Owt76IpKrcNicT8PogM8LFIy?key=M2FtRUh1cS1XQUVLdS1ZVDlhTDZ0bGZsQkJxM1FB) |
-| ![Raspberry Pi Zero W](https://photos.app.goo.gl/KHfsGGmuaw87fhBf7) |
-| ![Raspberry Pi connected to RGB Matrix Bonnet](https://photos.app.goo.gl/cqnCgESpTngZwZeS9) |
-| ![RGB Matrix Bonnet](https://photos.google.com/share/AF1QipMsmtNqdN-5M4sXHGo1j6Kf1vuD9z6663KYCGvuELj4ML6NbWCxB8GrgW7piCADYg/photo/AF1QipNQNMJdxwCsRYsph6B9GGWgMzhMmoAychx4W5IL?key=YVVzVjRDWVJlb01Eay1IWDVFVE8zVno3c2xxSTFn) |
-
-
+| [Power Supply Brick](https://photos.google.com/share/AF1QipNsIqyeEHIrXT9VP8A1IKr34ptzQHY_JPHF02mI6lNcXrIQbD_YwltlO2YAApMyZw/photo/AF1QipOaRkycxnqihjz6Owt76IpKrcNicT8PogM8LFIy?key=M2FtRUh1cS1XQUVLdS1ZVDlhTDZ0bGZsQkJxM1FB) |
+| [Raspberry Pi Zero W](https://photos.app.goo.gl/KHfsGGmuaw87fhBf7) |
+| [Raspberry Pi connected to RGB Matrix Bonnet](https://photos.app.goo.gl/cqnCgESpTngZwZeS9) |
+| [RGB Matrix Bonnet](https://photos.google.com/share/AF1QipMsmtNqdN-5M4sXHGo1j6Kf1vuD9z6663KYCGvuELj4ML6NbWCxB8GrgW7piCADYg/photo/AF1QipNQNMJdxwCsRYsph6B9GGWgMzhMmoAychx4W5IL?key=YVVzVjRDWVJlb01Eay1IWDVFVE8zVno3c2xxSTFn) |
 
 ### Client/Camera Module
 TODO lmao
+
+## Demonstration
+
+For the demonstration, here are several videos that highlight the system tracking three April Tags in real-time. 
+
+| Views | 
+| ----- |
+| [Dot Matrix Cam](https://youtu.be/hsFkJoQ_Yo8) |
+| [Client Screen Capture Cam](https://youtu.be/FzzDqCPymg8) |
+| [Physical April Cam Movement Cam](https://youtu.be/cZ3JV5UcapI) |
