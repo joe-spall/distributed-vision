@@ -145,7 +145,7 @@ if __name__ == "__main__":
                     # need to remove apriltag that we no longer see
                     #print(f"Removing ID {hmap.id[i]}")
                     ids_to_remove.append(hmap.id[i])
-                    del hmap.color_map[hmap.id[i]]
+                    #del hmap.color_map[hmap.id[i]]
             else:
                 # need to update x,y,z coordinate of existing april tag
                 #print(f"Updating ID {hmap.id[i]}")
@@ -172,11 +172,12 @@ if __name__ == "__main__":
             hmap.y.append(ys[idx])
             hmap.z.append(zs[idx])
             hmap.delete_life.append(1)
-            for color in hmap.colors:
-                if color not in hmap.color_map.values():
-                    #print(f"\t Getting color {color}")
-                    hmap.color_map[new_id] = color
-                    break
+            if new_id not in hmap.color_map.keys(): 
+                for color in hmap.colors:
+                    if color not in hmap.color_map.values():
+                        #print(f"\t Getting color {color}")
+                        hmap.color_map[new_id] = color
+                        break
         draw(hmap)
 
     
