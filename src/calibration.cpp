@@ -1,24 +1,8 @@
 // Copyright (C) 2019 Eugene a.k.a. Realizator, stereopi.com, virt2real team
-// Ported from Python to C++ by Konstantin Ozernov on 10/10/2019.
+// Ported from Python to C++ by Konstantin Ozernov on 10/10/2019. 
+// 
+// Modifications for distributed-vision project by Joseph Spall IV
 //
-// This file is part of StereoPi С++ tutorial scripts, and has been
-// ported from Pyton version (https://github.com/realizator/stereopi-fisheye-robot)
-//
-// StereoPi tutorial is free software: you can redistribute it 
-// and/or modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation, either version 3 of the 
-// License, or (at your option) any later version.
-//
-// StereoPi tutorial is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with StereoPi tutorial.  
-// If not, see <http://www.gnu.org/licenses/>.
-//
-
 
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -34,7 +18,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-
 // Camera resolution
 int photo_width = 1280;
 int photo_height = 480;
@@ -46,17 +29,15 @@ int img_height = 240;
 // Global settings
 std::string folder_name = "/home/pi/distributed-vision/calibration_data/";
 
-void calibrate_one_camera(std::vector<std::vector<cv::Vec3f> > objpoints, std::vector<std::vector<cv::Vec2f> > imgpoints, std::string right_or_left)
+void calibrate_one_camera(std::vector<std::vector<cv::Vec3f> > objpoints, std::vector<std::vector<cv::Vec2f> > imgpoints, std::string front_or_back)
 {
     int N_OK = (int)objpoints.size();
     cv::Size DIM(img_width, img_height);
 
-    cv::Mat K;// = cv::Mat::zeros(3, 3, CV_32FC1);
-    cv::Mat D;// = cv::Mat::zeros(4, 1, CV_32FC1);
+    cv::Mat K;
+    cv::Mat D;
 
     cv::Vec3f pt(0, 0, 0);
-    //    std::vector<cv::Vec3f> rvecs(N_OK, pt);
-    //    std::vector<cv::Vec3f> tvecs(N_OK, pt);
     cv::Mat rvecs = cv::Mat::zeros(N_OK, 1, CV_32FC3);
     cv::Mat tvecs = cv::Mat::zeros(N_OK, 1, CV_32FC3);
 
@@ -67,7 +48,7 @@ void calibrate_one_camera(std::vector<std::vector<cv::Vec3f> > objpoints, std::v
     cv::fisheye::initUndistortRectifyMap(K, D, pt, K, DIM, CV_16SC2, map1, map2);
 
     // Now we'll write our results to the file for the future use
-    cv::FileStorage fs(folder_name + "calibration_camera_" + std::to_string(img_height) + "_" + right_or_left + ".yml", cv::FileStorage::WRITE);
+    cv::FileStorage fs(folder_name + "calibration_camera_" + std::to_string(img_height) + "_" + front_or_back + ".yml", cv::FileStorage::WRITE);
     if (fs.isOpened())
     {
         fs << "map1" << map1 << "map2" << map2 << "objpoints" << objpoints << "imgpoints" <<
@@ -100,13 +81,12 @@ int main()
     //Calibration settings
     cv::Size CHECKERBOARD(6,9);
 
-    cv::Mat gray_small_left, gray_small_right;
+    cv::Mat gray_small_front, gray_small_back;
 
     cv::TermCriteria subpix_criteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, 0.1);
-    // calibration_flags = cv2.fisheye.CALIB_RECOMPUTE_EXTRINSIC+cv2.fisheye.CALIB_FIX_SKEW
 
     cv::Vec3f pt(0, 0, 0);
-    std::vector<cv::Vec3f> objp;//(CHECKERBOARD.width * CHECKERBOARD.height, pt);
+    std::vector<cv::Vec3f> objp;
     for (int i = 0; i < CHECKERBOARD.height; i++)
     {
         for (int j = 0; j < CHECKERBOARD.width; j++)
@@ -115,11 +95,10 @@ int main()
         }
     }
     fprintf(stderr, "size: %d\n", objp.size());
-    std::vector<std::vector<cv::Vec3f> > objpointsLeft;
-    std::vector<std::vector<cv::Vec2f> > imgpointsLeft;
-    std::vector<std::vector<cv::Vec3f> > objpointsRight;
-    std::vector<std::vector<cv::Vec2f> > imgpointsRight;
-    // _img_shape;
+    std::vector<std::vector<cv::Vec3f> > objpointsFront;
+    std::vector<std::vector<cv::Vec2f> > imgpointsFront;
+    std::vector<std::vector<cv::Vec3f> > objpointsBack;
+    std::vector<std::vector<cv::Vec2f> > imgpointsBack;
 
     if (drawCorners)
         fprintf(stderr, "You can press 'Q' to quit this script.\n");
@@ -127,41 +106,41 @@ int main()
     for (int photo_counter = 1; photo_counter <= total_photos; photo_counter++)
     {
         fprintf (stderr, "Import pair No %d\n", photo_counter);
-        std::string leftName = folder_name + "pairs/left_";
-        leftName += std::to_string(photo_counter) + ".png";
-        std::string rightName = folder_name + "pairs/right_";
-        rightName += std::to_string(photo_counter) + ".png";
+        std::string frontName = folder_name + "pairs/front_";
+        frontName += std::to_string(photo_counter) + ".png";
+        std::string backName = folder_name + "pairs/right_";
+        backName += std::to_string(photo_counter) + ".png";
 
-        cv::Mat imgL = cv::imread(leftName);
-        cv::Mat imgR = cv::imread(rightName);
-        if (imgR.empty() || imgL.empty())
+        cv::Mat imgF = cv::imread(frontName);
+        cv::Mat imgB = cv::imread(backName);
+        if (imgF.empty() || imgB.empty())
         {
             fprintf(stderr, "There are no images in pair No %d\n", photo_counter);
 	    continue;
         }
 
         // If stereopair is complete - go to processing
-        cv::Mat grayL;
-        cv::cvtColor(imgL, grayL, cv::COLOR_BGR2GRAY);
-        cv::resize (grayL, gray_small_left, cv::Size(img_width,img_height), cv::INTER_AREA);
-        cv::Mat grayR;
-        cv::cvtColor(imgR, grayR, cv::COLOR_BGR2GRAY);
-        cv::resize(grayR, gray_small_right, cv::Size(img_width, img_height), cv::INTER_AREA);
+        cv::Mat grayF;
+        cv::cvtColor(imgF, grayF, cv::COLOR_BGR2GRAY);
+        cv::resize (grayF, gray_small_front, cv::Size(img_width,img_height), cv::INTER_AREA);
+        cv::Mat grayB;
+        cv::cvtColor(imgB, grayB, cv::COLOR_BGR2GRAY);
+        cv::resize(grayB, gray_small_back, cv::Size(img_width, img_height), cv::INTER_AREA);
 
 
         // Find the chessboard corners
-        std::vector<cv::Vec2f> cornersL;
-        bool retL = cv::findChessboardCorners(grayL, CHECKERBOARD, cornersL, cv::CALIB_CB_ADAPTIVE_THRESH + cv::CALIB_CB_FAST_CHECK + cv::CALIB_CB_NORMALIZE_IMAGE);
-        std::vector<cv::Vec2f> cornersR;
-        bool retR = cv::findChessboardCorners(grayR, CHECKERBOARD, cornersR, cv::CALIB_CB_ADAPTIVE_THRESH + cv::CALIB_CB_FAST_CHECK + cv::CALIB_CB_NORMALIZE_IMAGE);
+        std::vector<cv::Vec2f> cornersF;
+        bool retF = cv::findChessboardCorners(grayF, CHECKERBOARD, cornersF, cv::CALIB_CB_ADAPTIVE_THRESH + cv::CALIB_CB_FAST_CHECK + cv::CALIB_CB_NORMALIZE_IMAGE);
+        std::vector<cv::Vec2f> cornersB;
+        bool retB = cv::findChessboardCorners(grayB, CHECKERBOARD, cornersB, cv::CALIB_CB_ADAPTIVE_THRESH + cv::CALIB_CB_FAST_CHECK + cv::CALIB_CB_NORMALIZE_IMAGE);
 
         // Draw images with corners found
         if (drawCorners)
         {
-            cv::drawChessboardCorners(imgL, CHECKERBOARD, cornersL, retL);
-            cv::imshow("Corners LEFT", imgL);
-            cv::drawChessboardCorners(imgR, CHECKERBOARD, cornersR, retR);
-            cv::imshow("Corners RIGHT", imgR);
+            cv::drawChessboardCorners(imgF, CHECKERBOARD, cornersF, retF);
+            cv::imshow("Corners BACK", imgF);
+            cv::drawChessboardCorners(imgB, CHECKERBOARD, cornersB, retB);
+            cv::imshow("Corners LEFT", imgB);
             char key = cv::waitKey();
             if (key == 'q' || key == 'Q')
                 exit(1);
@@ -169,13 +148,13 @@ int main()
 
         //       Here is our scaling trick! Hi res for calibration, low res for real work!
         //       Scale corners X and Y to our working resolution
-        if ((retL && retR) && (img_height <= photo_height))
+        if ((retF && retB) && (img_height <= photo_height))
         {
             float scale_ratio = (float)img_height/photo_height;
-            for (int i = 0; i < cornersL.size(); i++)
-                cornersL[i] *= scale_ratio;
-            for (int i = 0; i < cornersR.size(); i++)
-                cornersR[i] *= scale_ratio;
+            for (int i = 0; i < cornersF.size(); i++)
+                cornersF[i] *= scale_ratio;
+            for (int i = 0; i < cornersB.size(); i++)
+                cornersB[i] *= scale_ratio;
         }
         else if (img_height > photo_height)
         {
@@ -184,14 +163,14 @@ int main()
         }
 
         // Refine corners and add to array for processing
-        if (retL && retR)
+        if (retF && retB)
         {
-            objpointsLeft.push_back(objp);
-            cv::cornerSubPix(gray_small_left,cornersL,cv::Size(3,3), cv::Size(-1,-1),subpix_criteria);
-            imgpointsLeft.push_back(cornersL);
-            objpointsRight.push_back(objp);
-            cv::cornerSubPix(gray_small_right,cornersR, cv::Size(3,3), cv::Size(-1,-1), subpix_criteria);
-            imgpointsRight.push_back(cornersR);
+            objpointsFront.push_back(objp);
+            cv::cornerSubPix(gray_small_front,cornersF,cv::Size(3,3), cv::Size(-1,-1),subpix_criteria);
+            imgpointsFront.push_back(cornersF);
+            objpointsBack.push_back(objp);
+            cv::cornerSubPix(gray_small_back,cornersB, cv::Size(3,3), cv::Size(-1,-1), subpix_criteria);
+            imgpointsBack.push_back(cornersB);
         }
         else
         {
@@ -202,10 +181,10 @@ int main()
     }
 
     // Let's calibrate each camera, and than calibrate them together
-    fprintf (stderr, "Left camera calibration...\n");
-    calibrate_one_camera(objpointsLeft, imgpointsLeft, "left");
-    fprintf(stderr, "Right camera calibration...\n");
-    calibrate_one_camera(objpointsRight, imgpointsRight, "right");
+    fprintf (stderr, "Front camera calibration...\n");
+    calibrate_one_camera(objpointsFront, imgpointsFront, "front");
+    fprintf(stderr, "Back camera calibration...\n");
+    calibrate_one_camera(objpointsBack, imgpointsBack, "back");
     fprintf(stderr, "Calibration complete!\n");
 
     // The following code just shows you calibration results
@@ -217,45 +196,45 @@ int main()
         cv::Mat map1, map2;
 
         fprintf(stderr, "Undistorting picture with width = %d, height = %d\n", width, height);
-        cv::FileStorage fsLeft(folder_name + "calibration_camera_" + std::to_string(img_height) + "_left" + ".yml", cv::FileStorage::READ);
-        if (fsLeft.isOpened())
+        cv::FileStorage fsFront(folder_name + "calibration_camera_" + std::to_string(img_height) + "_front" + ".yml", cv::FileStorage::READ);
+        if (fsFront.isOpened())
         {
             fsLeft["map1"] >> map1;
             fsLeft["map2"] >> map2;
-            fsLeft.release();
+            fsFront.release();
         }
         else
         {
-            fprintf(stderr, "Left camera calibration data not found in cache.\n");
+            fprintf(stderr, "Front camera calibration data not found in cache.\n");
             return false;
         }
 
-        cv::Mat undistorted_left;
-        cv::remap(gray_small_left, undistorted_left, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
+        cv::Mat undistorted_front;
+        cv::remap(gray_small_front, undistorted_front, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
 
-        cv::FileStorage fsRight(folder_name + "calibration_camera_" + std::to_string(img_height) + "_right" + ".yml", cv::FileStorage::READ);
-        if (fsRight.isOpened())
+        cv::FileStorage fsBack(folder_name + "calibration_camera_" + std::to_string(img_height) + "_back" + ".yml", cv::FileStorage::READ);
+        if (fsBack.isOpened())
         {
-            fsRight["map1"] >> map1;
-            fsRight["map2"] >> map2;
-            fsRight.release();
+            fsBack["map1"] >> map1;
+            fsBack["map2"] >> map2;
+            fsBack.release();
         }
         else
         {
-            fprintf(stderr, "Right camera calibration data not found in cache.\n");
+            fprintf(stderr, "Back camera calibration data not found in cache.\n");
             return false;
         }
 
-        cv::Mat undistorted_right;
-        cv::remap(gray_small_right, undistorted_right, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
+        cv::Mat undistorted_back;
+        cv::remap(gray_small_back, undistorted_back, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
 
-        cv::imshow("Undistorted LEFT", undistorted_left);
-        cv::imshow("Undistorted RIGHT", undistorted_right);
+        cv::imshow("Undistorted FRONT", undistorted_front);
+        cv::imshow("Undistorted BACK", undistorted_back);
         cv::waitKey(0);
         if (writeUdistortedImages)
         {
-            cv::imwrite(folder_name + "undistorted_left.jpg", undistorted_left);
-            cv::imwrite(folder_name + "undistorted_right.jpg", undistorted_right);
+            cv::imwrite(folder_name + "undistorted_front.jpg", undistorted_front);
+            cv::imwrite(folder_name + "undistorted_back.jpg", undistorted_back);
         }
 
     }
