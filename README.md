@@ -118,10 +118,33 @@ g++ /home/pi/distributed-vision/src/calibration.cpp -o /home/pi/distributed-visi
 
 #### Running the Program
 
+The following will detail how to run the vision client:
 
+1. Run the following commands in the `distributed-vision` folder to pull in the [AprilTag](https://github.com/AprilRobotics/apriltag) submodule:
+```bash
+git submodule init
+git submodule update
+```
+2. Navigate to the `src` directory and copy the contents of `distributed_vision.cpp`
+3. Navigate to the `apriltag/example` directory and paste the contents into opencv_demo.cc
+4. Return to the `apriltag` and run the following command:
+```bash
+make
+sudo make install
+```
+5. Finally, to run the program:
+```bash
+raspividyuv -3d sbs -w 640 -h 240 -fps 40 --luma -t 0 -n -o - | /home/pi/distributed-vision/apriltag/opencv_demo
+```
+6. The server should be run before starting the client, but it will attempt to reconnect after it is started regardless
 
-
-
+| Example Photos |
+| -------------- |
+| [Full Vision Setup]() |
+| [AprilTag Example]() |
+| [Checkerboard]() |
+| [Front Camera]() |
+| [StereoPi Enclosure]() |
 
 
 
