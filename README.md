@@ -140,13 +140,11 @@ raspividyuv -3d sbs -w 640 -h 240 -fps 40 --luma -t 0 -n -o - | /home/pi/distrib
 
 | Example Photos |
 | -------------- |
-| [Full Vision Setup]() |
-| [AprilTag Example]() |
-| [Checkerboard]() |
-| [Front Camera]() |
-| [StereoPi Enclosure]() |
-
-
+| [Full Vision Setup](https://github.com/joe-spall/distributed-vision/blob/main/imgs/full_vision.jpg) |
+| [AprilTag Example](https://github.com/joe-spall/distributed-vision/blob/main/imgs/apriltag.jpg) |
+| [Checkerboard](https://github.com/joe-spall/distributed-vision/blob/main/imgs/checkerboard.jpg) |
+| [Front Camera](https://github.com/joe-spall/distributed-vision/blob/main/imgs/camera_front.jpg) |
+| [StereoPi Enclosure](https://github.com/joe-spall/distributed-vision/blob/main/imgs/stereo_pi_enclosure.jpg) |
 
 ## Demonstration
 
