@@ -33,7 +33,7 @@ This is the ECE 4180 Final Project submitted by Joe Spall and Sarkis Ter Martiro
 ### Server/RGB-Matrix Module
 
 #### Wiring
-The wiring on the client side is relatively straight forward. The Pi Zero W must be inserted into the Pi Cobbler+ so that the SD Card on the Raspberry Pi is aligned with the words ``Cobbler+'' on the Pi Cobbler PCB. From there, the Pi Cobbler+ must be hooked up to the RGB Matrix Bonnet so that the pins on the Raspberry Pi line up with the pins on the Bonnet as shown [here](https://learn.adafruit.com/assets/51032). Connect the 64x64 RGB Display to the Bonnet as shown in the tutorial for whatever RGB display you buy. The final step is to solder pins 4 and 18 on the RGB Matrix Bonnet.  
+The wiring on the client side is relatively straight forward. The Pi Zero W must be inserted into the Pi Cobbler+ so that the SD Card on the Raspberry Pi is aligned with the words ``Cobbler+`` on the Pi Cobbler PCB. From there, the Pi Cobbler+ must be hooked up to the RGB Matrix Bonnet so that the pins on the Raspberry Pi line up with the pins on the Bonnet as shown [here](https://learn.adafruit.com/assets/51032). Connect the 64x64 RGB Display to the Bonnet as shown in the tutorial for whatever RGB display you buy. The final step is to solder pins 4 and 18 on the RGB Matrix Bonnet.  
 
 #### Code
 The first step in setting up the code is to follow the installation instructions for the Bonnet library shown [here](https://learn.adafruit.com/adafruit-rgb-matrix-bonnet-for-raspberry-pi?view=all#driving-matrices). When it comes to select between quality and convenience, please select the quality option. From there clone in the server branch of this repository. You can get this branch onto your Raspberry Pi Zero W server by running these commands: 
@@ -72,6 +72,10 @@ The following is a list of steps to prepare the initial hardware setup:
 5. Attach to the 5V 2A power supply and turn on the power switch
 6. Plug in an Ethernet capble for network access
 7. Label the left camera facing the 40 pin header as the front and the right as the back camera
+
+#### Schematic
+
+![Camera Schematic](imgs/Camera_schematic.png)
 
 #### Software
 The following is a list of steps to prepare the initial software setup:
