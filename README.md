@@ -56,10 +56,10 @@ These are some sample photos of our setup.
 
 | Example Photos |
 | -------------- |
-| [Power Supply Brick](https://photos.google.com/share/AF1QipNsIqyeEHIrXT9VP8A1IKr34ptzQHY_JPHF02mI6lNcXrIQbD_YwltlO2YAApMyZw/photo/AF1QipOaRkycxnqihjz6Owt76IpKrcNicT8PogM8LFIy?key=M2FtRUh1cS1XQUVLdS1ZVDlhTDZ0bGZsQkJxM1FB) |
-| [Raspberry Pi Zero W](https://photos.app.goo.gl/KHfsGGmuaw87fhBf7) |
-| [Raspberry Pi connected to RGB Matrix Bonnet](https://photos.app.goo.gl/cqnCgESpTngZwZeS9) |
-| [RGB Matrix Bonnet](https://photos.google.com/share/AF1QipMsmtNqdN-5M4sXHGo1j6Kf1vuD9z6663KYCGvuELj4ML6NbWCxB8GrgW7piCADYg/photo/AF1QipNQNMJdxwCsRYsph6B9GGWgMzhMmoAychx4W5IL?key=YVVzVjRDWVJlb01Eay1IWDVFVE8zVno3c2xxSTFn) |
+| [Power Supply Brick](https://github.com/joe-spall/distributed-vision/blob/main/imgs/server_power_brick.jpg) |
+| [Raspberry Pi Zero W](https://github.com/joe-spall/distributed-vision/blob/main/imgs/server_rpi.jpg) |
+| [Raspberry Pi connected to RGB Matrix Bonnet](https://github.com/joe-spall/distributed-vision/blob/main/imgs/server_ribbon_cable.jpg) |
+| [RGB Matrix Bonnet](https://github.com/joe-spall/distributed-vision/blob/main/imgs/server_matrix_and_bonnet.jpg) |
 
 ### Client/Camera Module
 
