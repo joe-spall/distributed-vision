@@ -153,12 +153,15 @@ raspividyuv -3d sbs -w 640 -h 240 -fps 40 --luma -t 0 -n -o - | /home/pi/distrib
 | [Front Camera](https://github.com/joe-spall/distributed-vision/blob/main/imgs/camera_front.jpg) |
 | [StereoPi Enclosure](https://github.com/joe-spall/distributed-vision/blob/main/imgs/stereo_pi_enclosure.jpg) |
 
-## Demonstration
+## Presentation and Demonstration
 
-For the demonstration, here are several videos that highlight the system tracking three April Tags in real-time. 
+Below are the presentation and demonstration videos.
 
-| Views | 
+For the demonstration, there are several videos that highlight the system tracking three AprilTags in real-time. 
+
+| Videos | 
 | ----- |
+| [Presentation & Demonstration](https://youtu.be/L2u6jb4tPog)|
 | [Dot Matrix Cam](https://youtu.be/hsFkJoQ_Yo8) |
 | [Client Screen Capture Cam](https://youtu.be/FzzDqCPymg8) |
 | [Physical April Cam Movement Cam](https://youtu.be/cZ3JV5UcapI) |
